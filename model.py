@@ -58,7 +58,7 @@ class MultiHeadAttention(nn.Module):
         self.v_W = nn.Linear(self.d_model, self.d_model, bias=False) # Weights of the value matrix
         self.o_W = nn.Linear(self.d_model, self.d_model, bias=False) # Weights of the output matrix
         
-        self.register_buffer("mask",torch.tril(torch.ones(max_seq_len,max_seq_len)))
+        self.register_buffer("mask",torch.tril(torch.ones(max_seq_len,max_seq_len)).view(1,1,max_seq_len,max_seq_len))
 
     def forward(self,x):
         q = self.q_W(x) # (batch, seq_len, d_model) x (batch, d_model, d_model) --> (batch, seq_len, d_model)
@@ -70,7 +70,7 @@ class MultiHeadAttention(nn.Module):
         v = v.view(k.shape[0], v.shape[1], self.n_heads, self.head_dim).transpose(1,2) # (batch_size, seq_len, self.n_heads, self.head_dim) --> (batch_size, self.n_heads, seq_len, self.head_dim)
 
         attention_score = (q @ torch.transpose(k,-2,-1)) / math.sqrt(self.head_dim) # (batch_size, self.n_heads, seq_len, self.head_dim) x # (batch_size, self.n_heads, self.head_dim, seq_len) --> (batch_size, self.n_heads, seq_len, seq_len)
-        attention_score.masked_fill_(self.mask[:x.shape[1],:x.shape[1]] == 0, -torch.inf) # (batch_size, self.n_heads, seq_len, seq_len)
+        attention_score.masked_fill_(self.mask[:,:,:x.shape[1],:x.shape[1]] == 0, -torch.inf) # (batch_size, self.n_heads, seq_len, seq_len)
         attention_score = self.dropout(F.softmax(attention_score,dim=-1)) # (batch_size, self.n_heads, seq_len, seq_len)
         attention_out = attention_score @ v # (batch_size, self.n_heads, seq_len, seq_len) x (batch_size, self.n_heads, seq_len, self.head_dim) --> (batch_size, self.n_heads, seq_len, self.head_dim)
         attention_out = torch.transpose(attention_out,2,1).contiguous().view(attention_score.shape[0], -1, self.n_heads*self.head_dim) # (batch_size, seq_len, d_model)
@@ -85,8 +85,8 @@ class FeedForwardNetwork(nn.Module):
         self.ffn = nn.Sequential(
             nn.Linear(model_dimension,hidden_layer),
             nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_layer,model_dimension))
+            nn.Linear(hidden_layer,model_dimension),
+            nn.Dropout(dropout)),
     def forward(self,x):
         return self.ffn(x)
     
@@ -117,14 +117,15 @@ class GPT(nn.Module):
         self.positinal_encoding = PositionalEncoding(max_seq_len = max_seq_len, model_dimension = model_dimension, dropout = dropout)
         self.multi_head_attention = MultiHeadAttention(model_dimension = model_dimension, n_heads = n_heads,dropout=dropout, max_seq_len=max_seq_len)
         self.forward_propagation = FeedForwardNetwork(model_dimension = model_dimension, hidden_layer=hidden_layer, dropout=dropout)
-        self.residual_connect = Resudial_Connections(dropout=dropout,model_dimension=model_dimension)
+        self.res_connect_0 = Resudial_Connections(dropout=dropout,model_dimension=model_dimension)
+        self.res_connect_1 = Resudial_Connections(dropout=dropout,model_dimension=model_dimension)
         self.out = nn.Linear(model_dimension,vocab_size)
         self.n_block = n_block
     def forward(self,x):
         x = self.input_embedding(x) 
         x = self.positinal_encoding(x)
         for _ in range(self.n_block):
-            x = self.residual_connect(self.multi_head_attention(x))
-            x = self.residual_connect(self.forward_propagation(x))
+            x = self.multi_head_attention(self.res_connect_0(x))
+            x = self.forward_propagation(self.res_connect_1(x))
         x =  self.out(x)
         return x
