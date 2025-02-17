@@ -125,7 +125,7 @@ class GPT(nn.Module):
         x = self.input_embedding(x) 
         x = self.positinal_encoding(x)
         for _ in range(self.n_block):
-            x = self.multi_head_attention(self.res_connect_0(x))
-            x = self.forward_propagation(self.res_connect_1(x))
+            x = x + self.multi_head_attention(self.res_connect_0(x))
+            x = x + self.forward_propagation(self.res_connect_1(x))
         x =  self.out(x)
         return x
