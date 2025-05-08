@@ -67,7 +67,7 @@ class MultiHeadAttention(nn.Module):
 
         q = q.view(q.shape[0], q.shape[1], self.n_heads, self.head_dim).transpose(1,2) # (batch_size, seq_len, self.n_heads, self.head_dim) --> (batch_size, self.n_heads, seq_len, self.head_dim)
         k = k.view(k.shape[0], k.shape[1], self.n_heads, self.head_dim).transpose(1,2) # (batch_size, seq_len, self.n_heads, self.head_dim) --> (batch_size, self.n_heads, seq_len, self.head_dim)
-        v = v.view(k.shape[0], v.shape[1], self.n_heads, self.head_dim).transpose(1,2) # (batch_size, seq_len, self.n_heads, self.head_dim) --> (batch_size, self.n_heads, seq_len, self.head_dim)
+        v = v.view(v.shape[0], v.shape[1], self.n_heads, self.head_dim).transpose(1,2) # (batch_size, seq_len, self.n_heads, self.head_dim) --> (batch_size, self.n_heads, seq_len, self.head_dim)
 
         attention_score = (q @ torch.transpose(k,-2,-1)) / math.sqrt(self.head_dim) # (batch_size, self.n_heads, seq_len, self.head_dim) x # (batch_size, self.n_heads, self.head_dim, seq_len) --> (batch_size, self.n_heads, seq_len, seq_len)
         attention_score.masked_fill_(self.mask[:,:,:x.shape[1],:x.shape[1]] == 0, -torch.inf) # (batch_size, self.n_heads, seq_len, seq_len)
